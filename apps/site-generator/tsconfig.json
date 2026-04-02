@@ -1,7 +1,10 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "outDir": "../../dist/apps/site-generator"
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "outDir": "../../dist/apps/site-generator",
+    "types": ["node"]
   },
   "include": ["src/**/*.ts"]
 }
