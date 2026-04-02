@@ -1,0 +1,7 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "../../dist/apps/prospect-finder"
+  },
+  "include": ["src/**/*.ts"]
+}

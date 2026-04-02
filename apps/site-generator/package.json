@@ -1,0 +1,6 @@
+{
+  "name": "@my-auto-site-factory/site-generator",
+  "version": "0.0.1",
+  "private": true,
+  "main": "./src/main.ts"
+}
