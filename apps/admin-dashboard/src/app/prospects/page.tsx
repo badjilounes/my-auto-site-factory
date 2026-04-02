@@ -107,7 +107,7 @@ export function ProspectsPage() {
         </div>
         <Link
           href="/scraping"
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+          className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
         >
           Nouveau scraping
         </Link>
@@ -141,7 +141,7 @@ export function ProspectsPage() {
                 setFilterStatus(e.target.value);
                 setPage(1);
               }}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
             >
               <option value="">Tous les statuts</option>
               {PROSPECT_STATUSES.map((s) => (
@@ -169,7 +169,7 @@ export function ProspectsPage() {
           {hasFilters && (
             <button
               onClick={handleClearFilters}
-              className="px-3 py-2 text-sm text-slate-500 hover:text-slate-700 transition-colors"
+              className="px-3 py-2 text-sm text-slate-500 hover:text-slate-700 border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors"
             >
               Effacer les filtres
             </button>
@@ -179,96 +179,110 @@ export function ProspectsPage() {
 
       {/* Prospects Table */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-        <table className="w-full">
-          <thead>
-            <tr className="bg-slate-50 border-b border-slate-200">
-              <th className="text-left px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                Entreprise
-              </th>
-              <th className="text-left px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                Ville
-              </th>
-              <th className="text-left px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                Cuisine
-              </th>
-              <th className="text-left px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                Note
-              </th>
-              <th className="text-left px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                Statut
-              </th>
-              <th className="text-left px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                Date
-              </th>
-              <th className="text-left px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                Actions
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {loading ? (
-              <>
-                <SkeletonRow />
-                <SkeletonRow />
-                <SkeletonRow />
-                <SkeletonRow />
-                <SkeletonRow />
-              </>
-            ) : prospects.length === 0 ? (
-              <tr>
-                <td
-                  colSpan={7}
-                  className="px-6 py-12 text-center text-slate-400"
-                >
-                  {hasFilters
-                    ? 'Aucun prospect ne correspond aux filtres.'
-                    : 'Aucun prospect pour le moment. Lancez un scraping pour commencer.'}
-                </td>
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="bg-slate-50 border-b border-slate-200">
+                <th className="text-left px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                  Entreprise
+                </th>
+                <th className="text-left px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                  Ville
+                </th>
+                <th className="text-left px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                  Cuisine
+                </th>
+                <th className="text-left px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                  Note
+                </th>
+                <th className="text-left px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                  Statut
+                </th>
+                <th className="text-left px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                  Date
+                </th>
+                <th className="text-left px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                  Actions
+                </th>
               </tr>
-            ) : (
-              prospects.map((prospect) => (
-                <tr
-                  key={prospect.id}
-                  className="hover:bg-slate-50 transition-colors"
-                >
-                  <td className="px-6 py-4">
-                    <Link
-                      href={`/prospects/${prospect.id}`}
-                      className="text-sm font-semibold text-slate-900 hover:text-blue-600 transition-colors"
-                    >
-                      {prospect.businessName}
-                    </Link>
-                  </td>
-                  <td className="px-6 py-4 text-sm text-slate-600">
-                    {prospect.city}
-                  </td>
-                  <td className="px-6 py-4 text-sm text-slate-600">
-                    {prospect.cuisineType || '-'}
-                  </td>
-                  <td className="px-6 py-4 text-sm text-slate-600">
-                    {prospect.rating != null
-                      ? `${prospect.rating}/5`
-                      : '-'}
-                  </td>
-                  <td className="px-6 py-4">
-                    <StatusBadge status={prospect.status} />
-                  </td>
-                  <td className="px-6 py-4 text-sm text-slate-500">
-                    {formatRelativeDate(prospect.createdAt)}
-                  </td>
-                  <td className="px-6 py-4">
-                    <Link
-                      href={`/prospects/${prospect.id}`}
-                      className="text-sm text-blue-600 hover:text-blue-800 font-medium transition-colors"
-                    >
-                      Voir
-                    </Link>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {loading ? (
+                <>
+                  <SkeletonRow />
+                  <SkeletonRow />
+                  <SkeletonRow />
+                  <SkeletonRow />
+                  <SkeletonRow />
+                </>
+              ) : prospects.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={7}
+                    className="px-6 py-16 text-center"
+                  >
+                    <p className="text-slate-400 text-sm">
+                      {hasFilters
+                        ? 'Aucun prospect ne correspond aux filtres.'
+                        : 'Aucun prospect pour le moment. Lancez un scraping pour commencer.'}
+                    </p>
+                    {!hasFilters && (
+                      <Link
+                        href="/scraping"
+                        className="inline-block mt-3 text-sm text-blue-600 hover:text-blue-800 font-medium"
+                      >
+                        Lancer un scraping
+                      </Link>
+                    )}
                   </td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+              ) : (
+                prospects.map((prospect, index) => (
+                  <tr
+                    key={prospect.id}
+                    className={`hover:bg-blue-50/50 transition-colors ${
+                      index % 2 === 1 ? 'bg-slate-50/50' : ''
+                    }`}
+                  >
+                    <td className="px-6 py-4">
+                      <Link
+                        href={`/prospects/${prospect.id}`}
+                        className="text-sm font-semibold text-slate-900 hover:text-blue-600 transition-colors"
+                      >
+                        {prospect.businessName}
+                      </Link>
+                    </td>
+                    <td className="px-6 py-4 text-sm text-slate-600">
+                      {prospect.city}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-slate-600">
+                      {prospect.cuisineType || '-'}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-slate-600">
+                      {prospect.rating != null
+                        ? `${prospect.rating}/5`
+                        : '-'}
+                    </td>
+                    <td className="px-6 py-4">
+                      <StatusBadge status={prospect.status} />
+                    </td>
+                    <td className="px-6 py-4 text-sm text-slate-500">
+                      {formatRelativeDate(prospect.createdAt)}
+                    </td>
+                    <td className="px-6 py-4">
+                      <Link
+                        href={`/prospects/${prospect.id}`}
+                        className="inline-flex items-center px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 rounded-md hover:bg-blue-100 transition-colors"
+                      >
+                        Voir
+                      </Link>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {/* Pagination */}
