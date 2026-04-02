@@ -1,96 +1,68 @@
 'use client';
 
 import React from 'react';
+import { useSession } from 'next-auth/react';
+import { getMyAccount, updateDomain, verifyDomain } from '../../lib/api';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3333';
+type ClientAccount = Awaited<ReturnType<typeof getMyAccount>>;
 
-interface DomainInfo {
-  customDomain: string | null;
-  verificationStatus: 'pending' | 'verified' | 'failed' | 'not_configured';
-  defaultUrl: string | null;
-  cnameTarget: string;
-}
-
-const verificationStatusColors: Record<string, string> = {
-  verified: 'bg-green-100 text-green-700',
-  pending: 'bg-amber-100 text-amber-700',
-  failed: 'bg-red-100 text-red-700',
-  not_configured: 'bg-zinc-100 text-zinc-700',
-};
-
-const verificationStatusLabels: Record<string, string> = {
-  verified: 'Verifie',
-  pending: 'En attente de verification',
-  failed: 'Echec de verification',
-  not_configured: 'Non configure',
-};
-
-export default function DomainPage() {
-  const [domainInfo, setDomainInfo] = React.useState<DomainInfo | null>(null);
+export function DomainPage() {
+  const { data: session, status: sessionStatus } = useSession();
+  const [account, setAccount] = React.useState<ClientAccount | null>(null);
   const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState<string | null>(null);
+
   const [domainInput, setDomainInput] = React.useState('');
   const [saving, setSaving] = React.useState(false);
   const [verifying, setVerifying] = React.useState(false);
+  const [domainVerified, setDomainVerified] = React.useState<boolean | null>(null);
   const [message, setMessage] = React.useState<{
     type: 'success' | 'error';
     text: string;
   } | null>(null);
 
-  async function fetchDomain() {
-    try {
-      const res = await fetch(`${API_URL}/api/client/domain`, {
-        credentials: 'include',
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setDomainInfo(data);
+  React.useEffect(() => {
+    if (sessionStatus === 'loading') return;
+    if (!session) {
+      setLoading(false);
+      return;
+    }
+    async function fetchData() {
+      try {
+        const data = await getMyAccount();
+        setAccount(data);
         if (data.customDomain) {
           setDomainInput(data.customDomain);
         }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Erreur lors du chargement');
+      } finally {
+        setLoading(false);
       }
-    } catch (error) {
-      console.error(
-        'Erreur lors du chargement des informations de domaine:',
-        error
-      );
-    } finally {
-      setLoading(false);
     }
-  }
-
-  React.useEffect(() => {
-    fetchDomain();
-  }, []);
+    fetchData();
+  }, [session, sessionStatus]);
 
   async function handleSaveDomain(e: React.FormEvent) {
     e.preventDefault();
     if (!domainInput.trim()) return;
     setSaving(true);
     setMessage(null);
+    setDomainVerified(null);
     try {
-      const res = await fetch(`${API_URL}/api/client/domain`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ domain: domainInput.trim() }),
+      const result = await updateDomain(domainInput.trim());
+      setDomainVerified(result.verified);
+      setMessage({
+        type: 'success',
+        text: 'Domaine enregistre. Configurez les enregistrements DNS ci-dessous puis lancez la verification.',
       });
-      if (res.ok) {
-        setMessage({
-          type: 'success',
-          text: 'Domaine enregistre. Veuillez configurer l\'enregistrement DNS ci-dessous puis verifier.',
-        });
-        await fetchDomain();
-      } else {
-        const err = await res.json();
-        setMessage({
-          type: 'error',
-          text: err.message || 'Impossible d\'enregistrer le domaine.',
-        });
-      }
-    } catch {
+      // Refresh account data
+      const data = await getMyAccount();
+      setAccount(data);
+    } catch (err) {
       setMessage({
         type: 'error',
-        text: 'Impossible d\'enregistrer le domaine.',
+        text: err instanceof Error ? err.message : 'Impossible d\'enregistrer le domaine.',
       });
     } finally {
       setSaving(false);
@@ -101,54 +73,55 @@ export default function DomainPage() {
     setVerifying(true);
     setMessage(null);
     try {
-      const res = await fetch(`${API_URL}/api/client/domain/verify`, {
-        method: 'POST',
-        credentials: 'include',
-      });
-      if (res.ok) {
-        const result = await res.json();
-        if (result.verified) {
-          setMessage({
-            type: 'success',
-            text: 'Domaine verifie avec succes !',
-          });
-        } else {
-          setMessage({
-            type: 'error',
-            text: 'La verification a echoue. Veuillez verifier vos parametres DNS et reessayer.',
-          });
-        }
-        await fetchDomain();
+      const result = await verifyDomain();
+      setDomainVerified(result.verified);
+      if (result.verified) {
+        setMessage({
+          type: 'success',
+          text: 'Domaine verifie avec succes !',
+        });
+      } else {
+        setMessage({
+          type: 'error',
+          text: 'La verification a echoue. Verifiez vos parametres DNS et reessayez.',
+        });
       }
-    } catch {
+      // Refresh account data
+      const data = await getMyAccount();
+      setAccount(data);
+    } catch (err) {
       setMessage({
         type: 'error',
-        text: 'La demande de verification a echoue.',
+        text: err instanceof Error ? err.message : 'La demande de verification a echoue.',
       });
     } finally {
       setVerifying(false);
     }
   }
 
-  if (loading) {
+  if (loading || sessionStatus === 'loading') {
     return (
       <div className="flex items-center justify-center py-20">
-        <p className="text-zinc-400">
-          Chargement des parametres de domaine...
-        </p>
+        <p className="text-zinc-400">Chargement des parametres de domaine...</p>
       </div>
     );
   }
 
+  if (error || !account) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <p className="text-red-500">{error || 'Impossible de charger les donnees.'}</p>
+      </div>
+    );
+  }
+
+  const site = account.prospect?.generatedSite;
+  const isApex = domainInput && !domainInput.startsWith('www.');
+
   return (
     <div>
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-zinc-900">
-          Configuration du domaine
-        </h1>
-        <p className="text-zinc-500 mt-1">
-          Configurez un nom de domaine personnalise pour votre site vitrine
-        </p>
+        <h1 className="text-2xl font-bold text-zinc-900">Nom de domaine</h1>
       </div>
 
       {message && (
@@ -163,58 +136,52 @@ export default function DomainPage() {
         </div>
       )}
 
-      {/* Current Status */}
-      {domainInfo?.customDomain && (
-        <div className="bg-white rounded-xl border border-zinc-200 shadow-sm p-6 mb-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-lg font-semibold text-zinc-900 mb-1">
-                Domaine actuel
-              </h2>
-              <p className="text-sm text-zinc-700">
-                {domainInfo.customDomain}
-              </p>
-            </div>
-            <div className="flex items-center gap-3">
-              <span
-                className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                  verificationStatusColors[domainInfo.verificationStatus] ||
-                  'bg-zinc-100 text-zinc-700'
-                }`}
-              >
-                {verificationStatusLabels[domainInfo.verificationStatus] ||
-                  domainInfo.verificationStatus}
-              </span>
-              {domainInfo.verificationStatus !== 'verified' && (
-                <button
-                  onClick={handleVerify}
-                  disabled={verifying}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium disabled:opacity-50"
-                >
-                  {verifying ? 'Verification...' : 'Verifier maintenant'}
-                </button>
-              )}
-            </div>
+      {/* Current Domain Card */}
+      <div className="bg-white rounded-xl border border-zinc-200 shadow-sm p-6 mb-6">
+        <h2 className="text-lg font-semibold text-zinc-900 mb-3">Domaine actuel</h2>
+        {account.customDomain ? (
+          <div className="flex items-center gap-3">
+            <p className="text-sm text-zinc-900 font-medium">{account.customDomain}</p>
+            <span
+              className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                domainVerified === true
+                  ? 'bg-green-100 text-green-700'
+                  : domainVerified === false
+                    ? 'bg-red-100 text-red-700'
+                    : 'bg-amber-100 text-amber-700'
+              }`}
+            >
+              {domainVerified === true
+                ? 'Verifie'
+                : domainVerified === false
+                  ? 'Non verifie'
+                  : 'En attente de verification'}
+            </span>
           </div>
-        </div>
-      )}
+        ) : (
+          <p className="text-sm text-zinc-400">Aucun domaine personnalise configure</p>
+        )}
+      </div>
 
-      {/* Set Custom Domain */}
+      {/* Domain Form */}
       <div className="bg-white rounded-xl border border-zinc-200 shadow-sm p-6 mb-6">
         <h2 className="text-lg font-semibold text-zinc-900 mb-4">
-          {domainInfo?.customDomain ? 'Modifier le' : 'Definir un'} domaine
-          personnalise
+          {account.customDomain ? 'Modifier le domaine' : 'Configurer un domaine'}
         </h2>
         <form onSubmit={handleSaveDomain} className="flex items-end gap-4">
           <div className="flex-1">
-            <label className="block text-sm font-medium text-zinc-700 mb-1">
+            <label
+              htmlFor="domain-input"
+              className="block text-sm font-medium text-zinc-700 mb-1"
+            >
               Nom de domaine
             </label>
             <input
+              id="domain-input"
               type="text"
               value={domainInput}
               onChange={(e) => setDomainInput(e.target.value)}
-              placeholder="www.mon-restaurant.fr"
+              placeholder="monsuperrestaurant.fr"
               required
               className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
@@ -230,99 +197,75 @@ export default function DomainPage() {
       </div>
 
       {/* DNS Instructions */}
-      <div className="bg-white rounded-xl border border-zinc-200 shadow-sm p-6">
+      <div className="bg-white rounded-xl border border-zinc-200 shadow-sm p-6 mb-6">
         <h2 className="text-lg font-semibold text-zinc-900 mb-4">
-          Instructions de configuration DNS
+          Configuration DNS
         </h2>
         <p className="text-sm text-zinc-600 mb-4">
-          Pour connecter votre domaine personnalise, ajoutez l&apos;enregistrement
-          CNAME suivant dans les parametres DNS de votre registraire de domaine :
+          Pour lier votre domaine, ajoutez l&apos;enregistrement suivant chez votre registrar :
         </p>
 
-        <div className="bg-slate-50 rounded-lg p-4 mb-6 border border-zinc-200">
-          <p className="text-sm font-medium text-zinc-900 mb-3">
-            Ajoutez un enregistrement CNAME pointant vers{' '}
-            <code className="bg-zinc-200 px-2 py-0.5 rounded text-blue-600 font-mono text-xs">
-              cname.vercel-dns.com
-            </code>
-          </p>
+        <div className="overflow-x-auto mb-6">
           <table className="w-full text-sm">
             <thead>
-              <tr>
-                <th className="text-left py-2 px-3 text-xs font-semibold text-zinc-500 uppercase tracking-wider">
+              <tr className="bg-zinc-50 border-b border-zinc-200">
+                <th className="text-left px-4 py-2 text-xs font-semibold text-zinc-500 uppercase tracking-wider">
                   Type
                 </th>
-                <th className="text-left py-2 px-3 text-xs font-semibold text-zinc-500 uppercase tracking-wider">
-                  Nom / Hote
+                <th className="text-left px-4 py-2 text-xs font-semibold text-zinc-500 uppercase tracking-wider">
+                  Nom
                 </th>
-                <th className="text-left py-2 px-3 text-xs font-semibold text-zinc-500 uppercase tracking-wider">
-                  Valeur / Cible
-                </th>
-                <th className="text-left py-2 px-3 text-xs font-semibold text-zinc-500 uppercase tracking-wider">
-                  TTL
+                <th className="text-left px-4 py-2 text-xs font-semibold text-zinc-500 uppercase tracking-wider">
+                  Valeur
                 </th>
               </tr>
             </thead>
-            <tbody>
-              <tr>
-                <td className="py-2 px-3 font-mono text-zinc-900">CNAME</td>
-                <td className="py-2 px-3 font-mono text-zinc-900">
-                  {domainInfo?.customDomain
-                    ? domainInfo.customDomain.startsWith('www.')
-                      ? 'www'
-                      : '@'
-                    : 'www'}
-                </td>
-                <td className="py-2 px-3 font-mono text-blue-600">
-                  cname.vercel-dns.com
-                </td>
-                <td className="py-2 px-3 font-mono text-zinc-900">3600</td>
-              </tr>
+            <tbody className="divide-y divide-zinc-100">
+              {isApex ? (
+                <tr>
+                  <td className="px-4 py-3 font-mono text-zinc-900">A</td>
+                  <td className="px-4 py-3 font-mono text-zinc-900">@</td>
+                  <td className="px-4 py-3 font-mono text-blue-600">76.76.21.21</td>
+                </tr>
+              ) : (
+                <tr>
+                  <td className="px-4 py-3 font-mono text-zinc-900">CNAME</td>
+                  <td className="px-4 py-3 font-mono text-zinc-900">www</td>
+                  <td className="px-4 py-3 font-mono text-blue-600">cname.vercel-dns.com</td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
 
-        <div className="space-y-3">
-          <h3 className="text-sm font-semibold text-zinc-900">Etapes :</h3>
-          <ol className="list-decimal list-inside space-y-2 text-sm text-zinc-600">
-            <li>
-              Connectez-vous a votre registraire de domaine (ex : OVH,
-              Gandi, Cloudflare)
-            </li>
-            <li>
-              Accedez aux parametres DNS de votre domaine
-            </li>
-            <li>
-              Ajoutez un nouvel enregistrement CNAME avec les valeurs
-              indiquees ci-dessus
-            </li>
-            <li>
-              Sauvegardez les modifications et attendez jusqu&apos;a 24 heures
-              pour la propagation DNS
-            </li>
-            <li>
-              Revenez ici et cliquez sur &laquo; Verifier maintenant &raquo;
-              pour confirmer la configuration
-            </li>
-          </ol>
-        </div>
-
-        {domainInfo?.defaultUrl && (
-          <div className="mt-6 pt-4 border-t border-zinc-200">
-            <p className="text-xs text-zinc-500">
-              Votre site est actuellement accessible a l&apos;adresse :{' '}
-              <a
-                href={domainInfo.defaultUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-blue-600 hover:text-blue-800 transition-colors"
-              >
-                {domainInfo.defaultUrl}
-              </a>
-            </p>
-          </div>
-        )}
+        <button
+          onClick={handleVerify}
+          disabled={verifying || !account.customDomain}
+          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {verifying ? 'Verification en cours...' : 'Verifier la configuration'}
+        </button>
       </div>
+
+      {/* Default URL Card */}
+      {site?.deploymentUrl && (
+        <div className="bg-white rounded-xl border border-zinc-200 shadow-sm p-6">
+          <h2 className="text-lg font-semibold text-zinc-900 mb-3">URL par defaut</h2>
+          <p className="text-sm text-zinc-600">
+            Votre site est accessible a l&apos;adresse :{' '}
+            <a
+              href={site.deploymentUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-600 hover:text-blue-800 transition-colors font-medium"
+            >
+              {site.deploymentUrl}
+            </a>
+          </p>
+        </div>
+      )}
     </div>
   );
 }
+
+export default DomainPage;
