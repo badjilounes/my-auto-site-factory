@@ -2,41 +2,33 @@
 
 import React from 'react';
 import Link from 'next/link';
+import { StatusBadge } from '@my-auto-site-factory/shared-ui';
+import { getGeneratedSites } from '../../lib/api';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3333';
-
-interface GeneratedSite {
-  id: string;
-  prospectId: string;
-  businessName: string;
-  siteUrl: string | null;
-  deploymentStatus: string;
-  repositoryUrl: string | null;
-  domain: string | null;
-  createdAt: string;
-  deployedAt: string | null;
+function SkeletonCard() {
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden animate-pulse">
+      <div className="h-48 bg-slate-200" />
+      <div className="p-4 space-y-3">
+        <div className="h-5 bg-slate-200 rounded w-3/4" />
+        <div className="h-4 bg-slate-200 rounded w-1/2" />
+        <div className="h-4 bg-slate-200 rounded w-2/3" />
+      </div>
+    </div>
+  );
 }
 
-const deploymentStatusColors: Record<string, string> = {
-  pending: 'bg-slate-100 text-slate-700',
-  building: 'bg-blue-100 text-blue-700',
-  deployed: 'bg-green-100 text-green-700',
-  failed: 'bg-red-100 text-red-700',
-};
-
-export default function SitesPage() {
-  const [sites, setSites] = React.useState<GeneratedSite[]>([]);
+export function SitesPage() {
+  const [sites, setSites] = React.useState<any[]>([]);
   const [loading, setLoading] = React.useState(true);
 
   React.useEffect(() => {
     async function fetchSites() {
       try {
-        const res = await fetch(`${API_URL}/api/sites`);
-        if (res.ok) {
-          setSites(await res.json());
-        }
-      } catch (error) {
-        console.error('Failed to fetch sites:', error);
+        const result = await getGeneratedSites();
+        setSites(result.data);
+      } catch {
+        // silently handle
       } finally {
         setLoading(false);
       }
@@ -46,113 +38,115 @@ export default function SitesPage() {
 
   return (
     <div>
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-slate-900">Generated Sites</h1>
-        <p className="text-slate-500 mt-1">
-          All generated restaurant sites and their deployment status
-        </p>
+      {/* Header */}
+      <div className="flex items-center gap-3 mb-8">
+        <h1 className="text-2xl font-bold text-slate-900">Sites generes</h1>
+        <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-700">
+          {loading ? '-' : sites.length}
+        </span>
       </div>
 
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-        <table className="w-full">
-          <thead>
-            <tr className="bg-slate-50 border-b border-slate-200">
-              <th className="text-left px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                Business Name
-              </th>
-              <th className="text-left px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                Status
-              </th>
-              <th className="text-left px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                Domain
-              </th>
-              <th className="text-left px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                Created
-              </th>
-              <th className="text-left px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                Actions
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {loading ? (
-              <tr>
-                <td colSpan={5} className="px-6 py-8 text-center text-slate-400">
-                  Loading sites...
-                </td>
-              </tr>
-            ) : sites.length === 0 ? (
-              <tr>
-                <td colSpan={5} className="px-6 py-8 text-center text-slate-400">
-                  No sites generated yet
-                </td>
-              </tr>
-            ) : (
-              sites.map((site) => (
-                <tr
-                  key={site.id}
-                  className="hover:bg-slate-50 transition-colors"
-                >
-                  <td className="px-6 py-4">
-                    <Link
-                      href={`/prospects/${site.prospectId}`}
-                      className="text-sm font-medium text-slate-900 hover:text-blue-600 transition-colors"
+      {/* Sites Grid */}
+      {loading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+          <SkeletonCard />
+          <SkeletonCard />
+          <SkeletonCard />
+          <SkeletonCard />
+          <SkeletonCard />
+          <SkeletonCard />
+        </div>
+      ) : sites.length === 0 ? (
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-16 text-center">
+          <p className="text-slate-400 text-sm mb-3">
+            Aucun site genere pour le moment.
+          </p>
+          <Link
+            href="/prospects"
+            className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+          >
+            Voir les prospects
+          </Link>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+          {sites.map((site) => (
+            <div
+              key={site.id}
+              className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden hover:shadow-md transition-shadow"
+            >
+              {/* Mini Preview */}
+              {site.deploymentUrl ? (
+                <div className="relative h-48 bg-slate-100 overflow-hidden border-b border-slate-200">
+                  <iframe
+                    src={site.deploymentUrl}
+                    className="w-full h-full pointer-events-none"
+                    title={`Apercu de ${site.prospect?.businessName || site.businessName || 'Site'}`}
+                    tabIndex={-1}
+                    loading="lazy"
+                  />
+                  <div className="absolute inset-0" />
+                </div>
+              ) : (
+                <div className="h-48 bg-slate-50 border-b border-slate-200 flex items-center justify-center">
+                  <p className="text-slate-300 text-sm">Pas de preview</p>
+                </div>
+              )}
+
+              {/* Card Content */}
+              <div className="p-4">
+                <div className="flex items-start justify-between mb-3">
+                  <h3 className="text-sm font-semibold text-slate-900 truncate mr-2">
+                    {site.prospect?.businessName || site.businessName || 'Sans nom'}
+                  </h3>
+                  <StatusBadge status={site.deploymentStatus} />
+                </div>
+
+                {site.template && (
+                  <span className="inline-flex items-center rounded-full bg-purple-50 px-2 py-0.5 text-xs font-medium text-purple-700 mb-3">
+                    {site.template}
+                  </span>
+                )}
+
+                <div className="space-y-2 mt-3">
+                  {site.deploymentUrl && (
+                    <a
+                      href={site.deploymentUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block text-xs text-blue-600 hover:text-blue-800 truncate transition-colors"
                     >
-                      {site.businessName}
-                    </Link>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span
-                      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                        deploymentStatusColors[site.deploymentStatus] ||
-                        'bg-slate-100 text-slate-700'
-                      }`}
+                      {site.deploymentUrl}
+                    </a>
+                  )}
+
+                  {site.githubRepoUrl && (
+                    <a
+                      href={site.githubRepoUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block text-xs text-slate-500 hover:text-slate-700 truncate transition-colors"
                     >
-                      {site.deploymentStatus}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-sm text-slate-600">
-                    {site.domain || site.siteUrl || 'Not assigned'}
-                  </td>
-                  <td className="px-6 py-4 text-sm text-slate-500">
-                    {new Date(site.createdAt).toLocaleDateString()}
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      {site.siteUrl && (
-                        <a
-                          href={site.siteUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-sm text-blue-600 hover:text-blue-800 font-medium transition-colors"
-                        >
-                          Visit
-                        </a>
-                      )}
-                      {site.repositoryUrl && (
-                        <a
-                          href={site.repositoryUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-sm text-slate-600 hover:text-slate-800 font-medium transition-colors"
-                        >
-                          Repo
-                        </a>
-                      )}
-                      <Link
-                        href={`/prospects/${site.prospectId}`}
-                        className="text-sm text-slate-600 hover:text-slate-800 font-medium transition-colors"
-                      >
-                        Details
-                      </Link>
-                    </div>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+                      {site.githubRepoUrl}
+                    </a>
+                  )}
+                </div>
+
+                <div className="mt-4 pt-3 border-t border-slate-100">
+                  <Link
+                    href={`/prospects/${site.prospectId}`}
+                    className="text-xs text-blue-600 hover:text-blue-800 font-medium transition-colors"
+                  >
+                    Voir le prospect
+                  </Link>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
+
+export default SitesPage;
