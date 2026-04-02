@@ -7,7 +7,10 @@ export const clientAccountRepository = {
   },
 
   async findById(id: string): Promise<ClientAccount | null> {
-    return prisma.clientAccount.findUnique({ where: { id } });
+    return prisma.clientAccount.findUnique({
+      where: { id },
+      include: { prospect: true, user: true, invoices: { orderBy: { createdAt: 'desc' } } },
+    });
   },
 
   async findAll(params?: {
@@ -19,13 +22,11 @@ export const clientAccountRepository = {
       skip: params?.skip,
       take: params?.take,
       orderBy: params?.orderBy ?? { createdAt: 'desc' },
+      include: { prospect: true },
     });
   },
 
-  async update(
-    id: string,
-    data: Prisma.ClientAccountUpdateInput,
-  ): Promise<ClientAccount> {
+  async update(id: string, data: Prisma.ClientAccountUpdateInput): Promise<ClientAccount> {
     return prisma.clientAccount.update({ where: { id }, data });
   },
 
@@ -33,11 +34,25 @@ export const clientAccountRepository = {
     return prisma.clientAccount.delete({ where: { id } });
   },
 
-  async findByClerkUserId(clerkUserId: string): Promise<ClientAccount | null> {
-    return prisma.clientAccount.findUnique({ where: { clerkUserId } });
+  async findByUserId(userId: string): Promise<ClientAccount | null> {
+    return prisma.clientAccount.findUnique({
+      where: { userId },
+      include: { prospect: { include: { generatedSite: true } }, invoices: true },
+    });
   },
 
   async findByProspectId(prospectId: string): Promise<ClientAccount | null> {
-    return prisma.clientAccount.findUnique({ where: { prospectId } });
+    return prisma.clientAccount.findUnique({
+      where: { prospectId },
+      include: { user: true },
+    });
+  },
+
+  async findByStripeCustomerId(stripeCustomerId: string): Promise<ClientAccount | null> {
+    return prisma.clientAccount.findUnique({ where: { stripeCustomerId } });
+  },
+
+  async findByEmail(email: string): Promise<ClientAccount | null> {
+    return prisma.clientAccount.findFirst({ where: { email } });
   },
 };

@@ -1,3 +1,4 @@
+export * from './user';
 export * from './prospect';
 export * from './generated-site';
 export * from './client-account';
