@@ -4,20 +4,25 @@
   "sourceRoot": "apps/prospect-finder/src",
   "projectType": "application",
   "targets": {
+    "build": {
+      "executor": "@nx/webpack:webpack",
+      "outputs": ["{options.outputPath}"],
+      "options": {
+        "outputPath": "dist/apps/prospect-finder",
+        "main": "apps/prospect-finder/src/main.ts",
+        "tsConfig": "apps/prospect-finder/tsconfig.json",
+        "compiler": "tsc",
+        "target": "node",
+        "webpackConfig": "apps/prospect-finder/webpack.config.js"
+      }
+    },
     "serve": {
       "executor": "@nx/js:node",
       "options": {
         "buildTarget": "prospect-finder:build",
         "watch": true
       }
-    },
-    "build": {
-      "executor": "@nx/js:swc",
-      "options": {
-        "outputPath": "dist/apps/prospect-finder",
-        "main": "apps/prospect-finder/src/main.ts",
-        "tsConfig": "apps/prospect-finder/tsconfig.json"
-      }
     }
-  }
+  },
+  "tags": ["scope:worker", "type:app"]
 }
