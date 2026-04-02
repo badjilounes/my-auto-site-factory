@@ -1,45 +1,51 @@
 'use client';
 
 import React from 'react';
+import { useSession } from 'next-auth/react';
+import { getMyAccount } from '../../lib/api';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3333';
+type ClientAccount = Awaited<ReturnType<typeof getMyAccount>>;
 
-interface SiteInfo {
-  url: string | null;
-  previewUrl: string | null;
-  repositoryUrl: string | null;
-  status: string;
-  domain: string | null;
-  businessName: string;
-  lastUpdated: string | null;
-}
+const deploymentStatusColors: Record<string, string> = {
+  DEPLOYED: 'bg-green-100 text-green-700',
+  BUILDING: 'bg-blue-100 text-blue-700',
+  PENDING: 'bg-amber-100 text-amber-700',
+  FAILED: 'bg-red-100 text-red-700',
+};
 
-export default function SitePage() {
-  const [site, setSite] = React.useState<SiteInfo | null>(null);
+const deploymentStatusLabels: Record<string, string> = {
+  DEPLOYED: 'En ligne',
+  BUILDING: 'En construction',
+  PENDING: 'En attente',
+  FAILED: 'Echec',
+};
+
+export function SitePage() {
+  const { data: session, status: sessionStatus } = useSession();
+  const [account, setAccount] = React.useState<ClientAccount | null>(null);
   const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
-    async function fetchSite() {
+    if (sessionStatus === 'loading') return;
+    if (!session) {
+      setLoading(false);
+      return;
+    }
+    async function fetchData() {
       try {
-        const res = await fetch(`${API_URL}/api/client/site`, {
-          credentials: 'include',
-        });
-        if (res.ok) {
-          setSite(await res.json());
-        }
-      } catch (error) {
-        console.error(
-          'Erreur lors du chargement des informations du site:',
-          error
-        );
+        const data = await getMyAccount();
+        setAccount(data);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Erreur lors du chargement');
       } finally {
         setLoading(false);
       }
     }
-    fetchSite();
-  }, []);
+    fetchData();
+  }, [session, sessionStatus]);
 
-  if (loading) {
+  if (loading || sessionStatus === 'loading') {
     return (
       <div className="flex items-center justify-center py-20">
         <p className="text-zinc-400">Chargement des informations du site...</p>
@@ -47,164 +53,118 @@ export default function SitePage() {
     );
   }
 
-  if (!site) {
+  if (error) {
     return (
-      <div className="flex flex-col items-center justify-center py-20">
-        <p className="text-zinc-400 mb-2">
-          Aucune information de site disponible
-        </p>
-        <p className="text-zinc-500 text-sm">
-          Votre site est peut-etre encore en cours de preparation. Veuillez
-          revenir bientot.
-        </p>
+      <div className="flex items-center justify-center py-20">
+        <p className="text-red-500">{error}</p>
       </div>
     );
   }
 
-  const statusColors: Record<string, string> = {
-    deployed: 'bg-green-100 text-green-700',
-    building: 'bg-blue-100 text-blue-700',
-    pending: 'bg-amber-100 text-amber-700',
-    failed: 'bg-red-100 text-red-700',
-  };
-
-  const statusLabels: Record<string, string> = {
-    deployed: 'Deploye',
-    building: 'En construction',
-    pending: 'En attente',
-    failed: 'Echec',
-  };
+  const site = account?.prospect?.generatedSite;
+  const deploymentStatus = site?.deploymentStatus || 'PENDING';
+  const isDeployed = deploymentStatus === 'DEPLOYED' && site?.deploymentUrl;
 
   return (
     <div>
-      <div className="mb-8">
+      <div className="flex items-center gap-4 mb-8">
         <h1 className="text-2xl font-bold text-zinc-900">Mon Site</h1>
-        <p className="text-zinc-500 mt-1">
-          Visualisez et gerez votre site vitrine
-        </p>
+        <span
+          className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
+            deploymentStatusColors[deploymentStatus] || 'bg-zinc-100 text-zinc-700'
+          }`}
+        >
+          {deploymentStatusLabels[deploymentStatus] || deploymentStatus}
+        </span>
       </div>
 
-      {/* Site Info Bar */}
-      <div className="bg-white rounded-xl border border-zinc-200 shadow-sm p-6 mb-6">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <h2 className="text-lg font-semibold text-zinc-900">
-              {site.businessName}
-            </h2>
-            <div className="flex items-center gap-3 mt-1">
-              <span
-                className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                  statusColors[site.status] || 'bg-zinc-100 text-zinc-700'
-                }`}
+      {isDeployed && site?.deploymentUrl ? (
+        <>
+          {/* Site URL */}
+          <div className="bg-white rounded-xl border border-zinc-200 shadow-sm p-6 mb-6">
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-zinc-600 break-all">
+                {site.deploymentUrl}
+              </p>
+              <a
+                href={site.deploymentUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex-shrink-0 ml-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
               >
-                {statusLabels[site.status] || site.status}
-              </span>
-              {site.lastUpdated && (
-                <span className="text-xs text-zinc-500">
-                  Derniere mise a jour :{' '}
-                  {new Date(site.lastUpdated).toLocaleDateString('fr-FR')}
-                </span>
+                Ouvrir dans un nouvel onglet
+              </a>
+            </div>
+          </div>
+
+          {/* iframe preview */}
+          <div className="bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden mb-6">
+            <iframe
+              src={site.deploymentUrl}
+              className="w-full h-[700px]"
+              title={`Apercu de ${account?.prospect?.businessName || 'votre site'}`}
+            />
+          </div>
+
+          {/* Info card */}
+          <div className="bg-white rounded-xl border border-zinc-200 shadow-sm p-6">
+            <h2 className="text-lg font-semibold text-zinc-900 mb-4">
+              Informations
+            </h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-1">
+                  Etablissement
+                </p>
+                <p className="text-sm text-zinc-900">
+                  {account?.prospect?.businessName || '-'}
+                </p>
+              </div>
+              {site.githubRepoUrl && (
+                <div>
+                  <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-1">
+                    Depot GitHub
+                  </p>
+                  <a
+                    href={site.githubRepoUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm text-blue-600 hover:text-blue-800 transition-colors break-all"
+                  >
+                    {site.githubRepoUrl}
+                  </a>
+                </div>
               )}
             </div>
           </div>
-          <div className="flex items-center gap-3">
-            {site.url && (
-              <a
-                href={site.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
-              >
-                Ouvrir le site
-              </a>
+        </>
+      ) : (
+        <div className="bg-white rounded-xl border border-zinc-200 shadow-sm p-6">
+          <div className="flex flex-col items-center justify-center py-12">
+            {site ? (
+              <>
+                <p className="text-zinc-500 text-lg mb-2">
+                  Votre site est en cours de creation...
+                </p>
+                <p className="text-zinc-400 text-sm">
+                  La generation peut prendre quelques minutes. Revenez bientot.
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="text-zinc-500 text-lg mb-2">
+                  Aucun site genere pour le moment
+                </p>
+                <p className="text-zinc-400 text-sm">
+                  Votre site sera disponible prochainement.
+                </p>
+              </>
             )}
-            {site.repositoryUrl && (
-              <a
-                href={site.repositoryUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-4 py-2 border border-zinc-300 text-zinc-700 rounded-lg hover:bg-zinc-50 transition-colors text-sm font-medium"
-              >
-                Voir le depot
-              </a>
-            )}
           </div>
         </div>
-      </div>
-
-      {/* Site Details */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-        <div className="bg-white rounded-xl border border-zinc-200 shadow-sm p-6">
-          <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-1">
-            URL du site
-          </p>
-          {site.url ? (
-            <a
-              href={site.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-sm text-blue-600 hover:text-blue-800 transition-colors break-all"
-            >
-              {site.url}
-            </a>
-          ) : (
-            <p className="text-sm text-zinc-400">Pas encore disponible</p>
-          )}
-        </div>
-        <div className="bg-white rounded-xl border border-zinc-200 shadow-sm p-6">
-          <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-1">
-            Domaine personnalise
-          </p>
-          <p className="text-sm text-zinc-900">
-            {site.domain || 'Non configure'}
-          </p>
-        </div>
-        <div className="bg-white rounded-xl border border-zinc-200 shadow-sm p-6">
-          <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-1">
-            Depot
-          </p>
-          {site.repositoryUrl ? (
-            <a
-              href={site.repositoryUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-sm text-blue-600 hover:text-blue-800 transition-colors break-all"
-            >
-              {site.repositoryUrl}
-            </a>
-          ) : (
-            <p className="text-sm text-zinc-400">Pas encore disponible</p>
-          )}
-        </div>
-      </div>
-
-      {/* Site Preview */}
-      <div className="bg-white rounded-xl border border-zinc-200 shadow-sm p-6">
-        <h2 className="text-lg font-semibold text-zinc-900 mb-4">
-          Apercu du site
-        </h2>
-        {site.previewUrl ? (
-          <div className="border border-zinc-200 rounded-lg overflow-hidden">
-            <iframe
-              src={site.previewUrl}
-              className="w-full h-[700px]"
-              title={`Apercu de ${site.businessName}`}
-            />
-          </div>
-        ) : (
-          <div className="border border-dashed border-zinc-300 rounded-lg flex items-center justify-center h-[400px] bg-zinc-50">
-            <div className="text-center">
-              <p className="text-zinc-400 mb-1">
-                Apercu non disponible pour le moment
-              </p>
-              <p className="text-zinc-500 text-sm">
-                Votre site est en cours de construction. Cela peut prendre
-                quelques minutes.
-              </p>
-            </div>
-          </div>
-        )}
-      </div>
+      )}
     </div>
   );
 }
+
+export default SitePage;

@@ -2,58 +2,75 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { useUser, SignInButton } from '@clerk/nextjs';
+import { useSession } from 'next-auth/react';
+import { getMyAccount } from '../lib/api';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3333';
+type ClientAccount = Awaited<ReturnType<typeof getMyAccount>>;
 
-interface ClientDashboard {
-  site: {
-    url: string | null;
-    previewUrl: string | null;
-    status: string;
-    domain: string | null;
-  } | null;
-  subscription: {
-    plan: string;
-    status: string;
-    nextBillingDate: string | null;
-  } | null;
-  recentInvoices: Array<{
-    id: string;
-    amount: number;
-    status: string;
-    date: string;
-  }>;
-}
+const subscriptionStatusColors: Record<string, string> = {
+  TRIAL: 'bg-amber-100 text-amber-700',
+  ACTIVE: 'bg-green-100 text-green-700',
+  CANCELLED: 'bg-red-100 text-red-700',
+  EXPIRED: 'bg-zinc-100 text-zinc-700',
+};
 
-export default function ClientPortalHome() {
-  const { isSignedIn, isLoaded, user } = useUser();
-  const [data, setData] = React.useState<ClientDashboard | null>(null);
+const subscriptionStatusLabels: Record<string, string> = {
+  TRIAL: 'Essai gratuit',
+  ACTIVE: 'Actif',
+  CANCELLED: 'Annule',
+  EXPIRED: 'Expire',
+};
+
+const deploymentStatusColors: Record<string, string> = {
+  DEPLOYED: 'bg-green-100 text-green-700',
+  BUILDING: 'bg-blue-100 text-blue-700',
+  PENDING: 'bg-amber-100 text-amber-700',
+  FAILED: 'bg-red-100 text-red-700',
+};
+
+const deploymentStatusLabels: Record<string, string> = {
+  DEPLOYED: 'En ligne',
+  BUILDING: 'En construction',
+  PENDING: 'En attente',
+  FAILED: 'Echec',
+};
+
+const formatCurrency = (amount: number) =>
+  new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(amount);
+
+const features = [
+  'Hebergement haute performance',
+  'Domaine personnalise',
+  'Support technique',
+  'Design responsive',
+];
+
+export function ClientPortalHome() {
+  const { data: session, status } = useSession();
+  const [account, setAccount] = React.useState<ClientAccount | null>(null);
   const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
-    if (!isSignedIn) {
+    if (status === 'loading') return;
+    if (!session) {
       setLoading(false);
       return;
     }
-    async function fetchDashboard() {
+    async function fetchAccount() {
       try {
-        const res = await fetch(`${API_URL}/api/client/dashboard`, {
-          credentials: 'include',
-        });
-        if (res.ok) {
-          setData(await res.json());
-        }
-      } catch (error) {
-        console.error('Erreur lors du chargement du tableau de bord:', error);
+        const data = await getMyAccount();
+        setAccount(data);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Erreur lors du chargement');
       } finally {
         setLoading(false);
       }
     }
-    fetchDashboard();
-  }, [isSignedIn]);
+    fetchAccount();
+  }, [session, status]);
 
-  if (!isLoaded) {
+  if (status === 'loading') {
     return (
       <div className="flex items-center justify-center py-20">
         <p className="text-zinc-400">Chargement...</p>
@@ -61,224 +78,152 @@ export default function ClientPortalHome() {
     );
   }
 
-  // Not signed in - show hero section
-  if (!isSignedIn) {
+  if (!session) {
     return (
       <div className="flex flex-col items-center justify-center py-20">
         <div className="text-center max-w-lg">
-          <div className="w-16 h-16 bg-blue-100 rounded-2xl flex items-center justify-center mx-auto mb-6">
-            <div className="w-8 h-8 bg-blue-600 rounded-lg" />
-          </div>
           <h1 className="text-4xl font-bold text-zinc-900 mb-4">
-            Bienvenue sur votre Portail Client
+            Votre site vitrine professionnel
           </h1>
           <p className="text-zinc-500 mb-8 text-lg">
-            Connectez-vous pour gerer votre site vitrine, consulter votre
-            abonnement, configurer votre nom de domaine et suivre votre
-            facturation.
+            Nous avons cree un site moderne pour votre etablissement.
+            Connectez-vous pour le gerer.
           </p>
-          <SignInButton mode="modal">
-            <button className="px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-base font-medium shadow-sm">
-              Se connecter pour commencer
-            </button>
-          </SignInButton>
+          <Link
+            href="/sign-in"
+            className="inline-block px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-base font-medium shadow-sm"
+          >
+            Se connecter
+          </Link>
+          <ul className="mt-10 space-y-3 text-left text-zinc-600 text-sm">
+            {features.map((feature, i) => (
+              <li key={i} className="flex items-center gap-3">
+                <span className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold">
+                  {i + 1}
+                </span>
+                {feature}
+              </li>
+            ))}
+          </ul>
         </div>
       </div>
     );
   }
 
-  const statusColors: Record<string, string> = {
-    active: 'bg-green-100 text-green-700',
-    deployed: 'bg-green-100 text-green-700',
-    building: 'bg-blue-100 text-blue-700',
-    pending: 'bg-amber-100 text-amber-700',
-    canceled: 'bg-red-100 text-red-700',
-    past_due: 'bg-red-100 text-red-700',
-    paid: 'bg-green-100 text-green-700',
-    unpaid: 'bg-amber-100 text-amber-700',
-  };
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <p className="text-zinc-400">Chargement de vos donnees...</p>
+      </div>
+    );
+  }
 
-  const statusLabels: Record<string, string> = {
-    active: 'Actif',
-    deployed: 'Deploye',
-    building: 'En construction',
-    pending: 'En attente',
-    canceled: 'Annule',
-    past_due: 'En retard',
-    paid: 'Paye',
-    unpaid: 'Impaye',
-  };
+  if (error || !account) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <p className="text-red-500">{error || 'Impossible de charger votre compte.'}</p>
+      </div>
+    );
+  }
+
+  const site = account.prospect?.generatedSite;
+  const deploymentStatus = site?.deploymentStatus || 'PENDING';
+  const planLabel =
+    account.subscriptionPlan === 'YEARLY'
+      ? `Annuel -- ${formatCurrency(299.99)}/an`
+      : account.subscriptionPlan === 'MONTHLY'
+        ? `Mensuel -- ${formatCurrency(29.99)}/mois`
+        : 'Aucun forfait';
+
+  const billingDateLabel = (() => {
+    if (account.subscriptionStatus === 'TRIAL' && account.trialEndsAt) {
+      return `Essai jusqu'au ${new Date(account.trialEndsAt).toLocaleDateString('fr-FR')}`;
+    }
+    if (account.currentPeriodEndsAt) {
+      return `Prochain paiement le ${new Date(account.currentPeriodEndsAt).toLocaleDateString('fr-FR')}`;
+    }
+    return null;
+  })();
 
   return (
     <div>
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-zinc-900">
-          Bonjour{user?.firstName ? `, ${user.firstName}` : ''} !
+          Bienvenue, {account.businessName}
         </h1>
-        <p className="text-zinc-500 mt-1">
-          Gerez votre site vitrine et votre abonnement depuis votre espace
-          client.
-        </p>
       </div>
 
-      {loading ? (
-        <div className="flex items-center justify-center py-12">
-          <p className="text-zinc-400">Chargement de vos donnees...</p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Site Status Card */}
-          <div className="bg-white rounded-xl border border-zinc-200 shadow-sm p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-zinc-900">Mon Site</h2>
-              {data?.site?.status && (
-                <span
-                  className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                    statusColors[data.site.status] ||
-                    'bg-zinc-100 text-zinc-700'
-                  }`}
-                >
-                  {statusLabels[data.site.status] || data.site.status}
-                </span>
-              )}
-            </div>
-            {data?.site?.previewUrl ? (
-              <div className="border border-zinc-200 rounded-lg overflow-hidden mb-4">
-                <iframe
-                  src={data.site.previewUrl}
-                  className="w-full h-48 pointer-events-none"
-                  title="Apercu du site"
-                />
-              </div>
-            ) : (
-              <div className="border border-dashed border-zinc-300 rounded-lg h-48 flex items-center justify-center bg-zinc-50 mb-4">
-                <p className="text-zinc-400 text-sm">
-                  Votre site est en cours de preparation
-                </p>
-              </div>
-            )}
-            <Link
-              href="/site"
-              className="text-sm text-blue-600 hover:text-blue-800 font-medium transition-colors"
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {/* Mon Site */}
+        <div className="bg-white rounded-xl border border-zinc-200 shadow-sm p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-zinc-900">Mon Site</h2>
+            <span
+              className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                deploymentStatusColors[deploymentStatus] || 'bg-zinc-100 text-zinc-700'
+              }`}
             >
-              Voir l&apos;apercu complet &rarr;
-            </Link>
+              {deploymentStatusLabels[deploymentStatus] || deploymentStatus}
+            </span>
           </div>
-
-          {/* Subscription Status Card */}
-          <div className="bg-white rounded-xl border border-zinc-200 shadow-sm p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-zinc-900">
-                Abonnement
-              </h2>
-              {data?.subscription?.status && (
-                <span
-                  className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                    statusColors[data.subscription.status] ||
-                    'bg-zinc-100 text-zinc-700'
-                  }`}
-                >
-                  {statusLabels[data.subscription.status] ||
-                    data.subscription.status}
-                </span>
-              )}
-            </div>
-            <div className="space-y-3 mb-4">
-              <div>
-                <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider">
-                  Forfait actuel
-                </p>
-                <p className="text-sm text-zinc-900 mt-0.5">
-                  {data?.subscription?.plan || 'Aucun forfait actif'}
-                </p>
-              </div>
-              {data?.subscription?.nextBillingDate && (
-                <div>
-                  <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider">
-                    Prochaine facturation
-                  </p>
-                  <p className="text-sm text-zinc-900 mt-0.5">
-                    {new Date(
-                      data.subscription.nextBillingDate
-                    ).toLocaleDateString('fr-FR')}
-                  </p>
-                </div>
-              )}
-            </div>
-            <Link
-              href="/billing"
-              className="text-sm text-blue-600 hover:text-blue-800 font-medium transition-colors"
-            >
-              Gerer la facturation &rarr;
-            </Link>
-          </div>
-
-          {/* Domain Card */}
-          <div className="bg-white rounded-xl border border-zinc-200 shadow-sm p-6">
-            <h2 className="text-lg font-semibold text-zinc-900 mb-4">
-              Domaine
-            </h2>
-            <div className="mb-4">
-              <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider">
-                Domaine personnalise
-              </p>
-              <p className="text-sm text-zinc-900 mt-0.5">
-                {data?.site?.domain || 'Non configure'}
-              </p>
-            </div>
-            <Link
-              href="/domain"
-              className="text-sm text-blue-600 hover:text-blue-800 font-medium transition-colors"
-            >
-              Configurer le domaine &rarr;
-            </Link>
-          </div>
-
-          {/* Recent Invoices Card */}
-          <div className="bg-white rounded-xl border border-zinc-200 shadow-sm p-6">
-            <h2 className="text-lg font-semibold text-zinc-900 mb-4">
-              Factures recentes
-            </h2>
-            {data?.recentInvoices && data.recentInvoices.length > 0 ? (
-              <div className="space-y-3">
-                {data.recentInvoices.slice(0, 3).map((invoice) => (
-                  <div
-                    key={invoice.id}
-                    className="flex items-center justify-between"
-                  >
-                    <div>
-                      <p className="text-sm text-zinc-900">
-                        {(invoice.amount / 100).toFixed(2)} EUR
-                      </p>
-                      <p className="text-xs text-zinc-500">
-                        {new Date(invoice.date).toLocaleDateString('fr-FR')}
-                      </p>
-                    </div>
-                    <span
-                      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                        statusColors[invoice.status] ||
-                        'bg-zinc-100 text-zinc-700'
-                      }`}
-                    >
-                      {statusLabels[invoice.status] || invoice.status}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-sm text-zinc-400">Aucune facture</p>
-            )}
-            <div className="mt-4">
-              <Link
-                href="/billing"
-                className="text-sm text-blue-600 hover:text-blue-800 font-medium transition-colors"
+          {site?.deploymentUrl ? (
+            <p className="text-sm text-zinc-600 mb-4 break-all">
+              <a
+                href={site.deploymentUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-600 hover:text-blue-800 transition-colors"
               >
-                Voir toutes les factures &rarr;
-              </Link>
-            </div>
-          </div>
+                {site.deploymentUrl}
+              </a>
+            </p>
+          ) : (
+            <p className="text-sm text-zinc-400 mb-4">Site en cours de preparation</p>
+          )}
+          <Link
+            href="/site"
+            className="inline-block px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+          >
+            Voir mon site
+          </Link>
         </div>
-      )}
+
+        {/* Abonnement */}
+        <div className="bg-white rounded-xl border border-zinc-200 shadow-sm p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-zinc-900">Abonnement</h2>
+            <span
+              className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                subscriptionStatusColors[account.subscriptionStatus] || 'bg-zinc-100 text-zinc-700'
+              }`}
+            >
+              {subscriptionStatusLabels[account.subscriptionStatus] || account.subscriptionStatus}
+            </span>
+          </div>
+          <p className="text-sm text-zinc-900 mb-2">{planLabel}</p>
+          {billingDateLabel && (
+            <p className="text-sm text-zinc-500">{billingDateLabel}</p>
+          )}
+        </div>
+
+        {/* Domaine */}
+        <div className="bg-white rounded-xl border border-zinc-200 shadow-sm p-6">
+          <h2 className="text-lg font-semibold text-zinc-900 mb-4">Domaine</h2>
+          {account.customDomain ? (
+            <p className="text-sm text-zinc-900 mb-4">{account.customDomain}</p>
+          ) : (
+            <p className="text-sm text-zinc-400 mb-4">Non configure</p>
+          )}
+          <Link
+            href="/domain"
+            className="text-sm text-blue-600 hover:text-blue-800 font-medium transition-colors"
+          >
+            Configurer le domaine
+          </Link>
+        </div>
+      </div>
     </div>
   );
 }
+
+export default ClientPortalHome;
