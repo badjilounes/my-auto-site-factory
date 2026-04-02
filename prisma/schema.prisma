@@ -1,0 +1,186 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ──────────────────────────────────────────────────────────────────
+
+enum ProspectStatus {
+  NEW
+  ENRICHED
+  SITE_GENERATING
+  SITE_GENERATED
+  SITE_DEPLOYED
+  OUTREACH_SENT
+  INTERESTED
+  CLIENT
+  REJECTED
+}
+
+enum DeploymentStatus {
+  PENDING
+  BUILDING
+  DEPLOYED
+  FAILED
+}
+
+enum SubscriptionStatus {
+  TRIAL
+  ACTIVE
+  CANCELLED
+  EXPIRED
+}
+
+enum InvoiceStatus {
+  DRAFT
+  SENT
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+enum ScrapingSource {
+  UBEREATS
+  DELIVEROO
+  GOOGLE
+  WEBSITE
+}
+
+enum ScrapingJobStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+enum OutreachEmailStatus {
+  QUEUED
+  SENT
+  OPENED
+  CLICKED
+  BOUNCED
+}
+
+// ─── Models ─────────────────────────────────────────────────────────────────
+
+model Prospect {
+  id           String          @id @default(cuid())
+  businessName String
+  email        String?
+  phone        String?
+  address      String?
+  city         String?
+  postalCode   String?
+  website      String?
+  uberEatsUrl  String?
+  deliverooUrl String?
+  logoUrl      String?
+  description  String?
+  cuisine      String?
+  openingHours Json?
+  rating       Float?
+  reviewCount  Int?
+  priceRange   String?
+  status       ProspectStatus  @default(NEW)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  generatedSite  GeneratedSite?
+  clientAccount  ClientAccount?
+  outreachEmails OutreachEmail[]
+
+  @@index([status])
+  @@index([city])
+  @@index([businessName])
+}
+
+model GeneratedSite {
+  id               String           @id @default(cuid())
+  prospectId       String           @unique
+  repositoryUrl    String?
+  repositoryName   String?
+  vercelProjectId  String?
+  vercelUrl        String?
+  deploymentStatus DeploymentStatus @default(PENDING)
+  templateUsed     String?
+  generatedCode    String?          @db.Text
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  prospect Prospect @relation(fields: [prospectId], references: [id], onDelete: Cascade)
+
+  @@index([deploymentStatus])
+}
+
+model ClientAccount {
+  id                 String             @id @default(cuid())
+  prospectId         String             @unique
+  clerkUserId        String?            @unique
+  email              String
+  isActive           Boolean            @default(true)
+  subscriptionStatus SubscriptionStatus @default(TRIAL)
+  customDomain       String?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  prospect Prospect  @relation(fields: [prospectId], references: [id], onDelete: Cascade)
+  invoices Invoice[]
+
+  @@index([subscriptionStatus])
+}
+
+model Invoice {
+  id              String        @id @default(cuid())
+  clientAccountId String
+  stripeInvoiceId String?       @unique
+  amount          Decimal       @db.Decimal(10, 2)
+  currency        String        @default("EUR")
+  status          InvoiceStatus @default(DRAFT)
+  dueDate         DateTime?
+  paidAt          DateTime?
+  pdfUrl          String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  clientAccount ClientAccount @relation(fields: [clientAccountId], references: [id], onDelete: Cascade)
+
+  @@index([clientAccountId])
+  @@index([status])
+}
+
+model ScrapingJob {
+  id          String           @id @default(cuid())
+  source      ScrapingSource
+  query       String
+  city        String?
+  status      ScrapingJobStatus @default(PENDING)
+  resultCount Int?
+  error       String?
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime         @default(now())
+
+  @@index([status])
+  @@index([source])
+}
+
+model OutreachEmail {
+  id         String              @id @default(cuid())
+  prospectId String
+  subject    String
+  body       String              @db.Text
+  status     OutreachEmailStatus @default(QUEUED)
+  sentAt     DateTime?
+  openedAt   DateTime?
+  clickedAt  DateTime?
+  createdAt  DateTime            @default(now())
+
+  prospect Prospect @relation(fields: [prospectId], references: [id], onDelete: Cascade)
+
+  @@index([prospectId])
+  @@index([status])
+}

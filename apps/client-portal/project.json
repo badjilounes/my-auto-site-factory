@@ -1,0 +1,46 @@
+{
+  "name": "client-portal",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "apps/client-portal/src",
+  "projectType": "application",
+  "tags": ["scope:client-portal", "type:app"],
+  "targets": {
+    "serve": {
+      "executor": "@nx/next:server",
+      "defaultConfiguration": "development",
+      "options": {
+        "buildTarget": "client-portal:build",
+        "dev": true,
+        "port": 4200
+      },
+      "configurations": {
+        "development": {
+          "buildTarget": "client-portal:build:development",
+          "dev": true
+        },
+        "production": {
+          "buildTarget": "client-portal:build:production",
+          "dev": false
+        }
+      }
+    },
+    "build": {
+      "executor": "@nx/next:build",
+      "outputs": ["{options.outputPath}"],
+      "defaultConfiguration": "production",
+      "options": {
+        "outputPath": "dist/apps/client-portal"
+      },
+      "configurations": {
+        "development": {
+          "outputPath": "apps/client-portal"
+        },
+        "production": {}
+      }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint",
+      "outputs": ["{options.outputFile}"]
+    }
+  }
+}
