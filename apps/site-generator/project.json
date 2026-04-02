@@ -4,20 +4,25 @@
   "sourceRoot": "apps/site-generator/src",
   "projectType": "application",
   "targets": {
+    "build": {
+      "executor": "@nx/webpack:webpack",
+      "outputs": ["{options.outputPath}"],
+      "options": {
+        "outputPath": "dist/apps/site-generator",
+        "main": "apps/site-generator/src/main.ts",
+        "tsConfig": "apps/site-generator/tsconfig.json",
+        "compiler": "tsc",
+        "target": "node",
+        "webpackConfig": "apps/site-generator/webpack.config.js"
+      }
+    },
     "serve": {
       "executor": "@nx/js:node",
       "options": {
         "buildTarget": "site-generator:build",
         "watch": true
       }
-    },
-    "build": {
-      "executor": "@nx/js:swc",
-      "options": {
-        "outputPath": "dist/apps/site-generator",
-        "main": "apps/site-generator/src/main.ts",
-        "tsConfig": "apps/site-generator/tsconfig.json"
-      }
     }
-  }
+  },
+  "tags": ["scope:worker", "type:app"]
 }
