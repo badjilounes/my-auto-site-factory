@@ -126,8 +126,9 @@ export function ProspectDetailPage() {
   if (loading) {
     return (
       <div className="space-y-6">
-        <div className="h-8 w-48 bg-slate-200 rounded animate-pulse" />
-        <div className="h-6 w-64 bg-slate-200 rounded animate-pulse" />
+        <div className="h-4 w-32 bg-slate-200 rounded animate-pulse" />
+        <div className="h-8 w-64 bg-slate-200 rounded animate-pulse" />
+        <div className="h-6 w-48 bg-slate-200 rounded animate-pulse" />
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="bg-white rounded-xl border border-slate-200 p-6 h-96 animate-pulse" />
           <div className="lg:col-span-2 bg-white rounded-xl border border-slate-200 p-6 h-96 animate-pulse" />
@@ -175,7 +176,7 @@ export function ProspectDetailPage() {
       )}
 
       {/* Breadcrumb */}
-      <div className="flex items-center gap-2 mb-1 text-sm">
+      <nav className="flex items-center gap-2 mb-2 text-sm">
         <Link
           href="/prospects"
           className="text-slate-400 hover:text-slate-600 transition-colors"
@@ -183,11 +184,11 @@ export function ProspectDetailPage() {
           Prospects
         </Link>
         <span className="text-slate-300">/</span>
-        <span className="text-slate-600">{prospect.businessName}</span>
-      </div>
+        <span className="text-slate-600 font-medium">{prospect.businessName}</span>
+      </nav>
 
       {/* Header */}
-      <div className="flex items-start justify-between mb-8">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between mb-8 gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">
             {prospect.businessName}
@@ -200,7 +201,7 @@ export function ProspectDetailPage() {
             </span>
           </div>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-shrink-0">
           {showGenerate && (
             <button
               onClick={handleGenerateSite}
@@ -367,7 +368,7 @@ export function ProspectDetailPage() {
         </div>
 
         {/* RIGHT COLUMN - Site Preview */}
-        <div className="lg:col-span-2">
+        <div className="lg:col-span-2 space-y-6">
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold text-slate-900">
@@ -381,7 +382,7 @@ export function ProspectDetailPage() {
                       href={site.deploymentUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-sm text-blue-600 hover:text-blue-800 font-medium transition-colors"
+                      className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 rounded-md hover:bg-blue-100 transition-colors"
                     >
                       Ouvrir le site
                     </a>
@@ -391,7 +392,7 @@ export function ProspectDetailPage() {
                       href={site.githubRepoUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-sm text-slate-600 hover:text-slate-800 font-medium transition-colors"
+                      className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-slate-700 bg-slate-100 rounded-md hover:bg-slate-200 transition-colors"
                     >
                       GitHub
                     </a>
@@ -437,7 +438,7 @@ export function ProspectDetailPage() {
 
           {/* Outreach Emails */}
           {prospect.outreachEmails && prospect.outreachEmails.length > 0 && (
-            <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 mt-6">
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
               <h2 className="text-lg font-semibold text-slate-900 mb-4">
                 Emails de demarchage
               </h2>
@@ -445,7 +446,7 @@ export function ProspectDetailPage() {
                 {prospect.outreachEmails.map((email: any) => (
                   <div
                     key={email.id}
-                    className="flex items-center justify-between border border-slate-100 rounded-lg p-3"
+                    className="flex items-center justify-between border border-slate-100 rounded-lg p-3 hover:bg-slate-50 transition-colors"
                   >
                     <div>
                       <p className="text-sm font-medium text-slate-900">
