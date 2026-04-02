@@ -1,96 +1,113 @@
-'use client';
+import { getDashboardStats } from '../lib/api';
 
-import React from 'react';
+const STATUS_LABELS: Record<string, string> = {
+  NEW: 'Nouveau',
+  ENRICHED: 'Enrichi',
+  SITE_GENERATED: 'Site genere',
+  SITE_DEPLOYED: 'Site deploye',
+  OUTREACH_SENT: 'Email envoye',
+  INTERESTED: 'Interesse',
+  CLIENT: 'Client',
+  NOT_INTERESTED: 'Non interesse',
+  INVALID: 'Invalide',
+};
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3333';
+const STATUS_COLORS: Record<string, string> = {
+  NEW: 'bg-slate-200',
+  ENRICHED: 'bg-blue-200',
+  SITE_GENERATED: 'bg-indigo-200',
+  SITE_DEPLOYED: 'bg-violet-200',
+  OUTREACH_SENT: 'bg-amber-200',
+  INTERESTED: 'bg-emerald-200',
+  CLIENT: 'bg-green-400',
+  NOT_INTERESTED: 'bg-red-200',
+  INVALID: 'bg-gray-300',
+};
 
-interface DashboardStats {
-  totalProspects: number;
-  sitesGenerated: number;
-  sitesDeployed: number;
-  pendingOutreach: number;
+function formatEur(amount: number): string {
+  return new Intl.NumberFormat('fr-FR', {
+    style: 'currency',
+    currency: 'EUR',
+  }).format(amount);
 }
 
-interface RecentActivity {
-  id: string;
-  type: string;
-  message: string;
-  createdAt: string;
+function formatPercent(value: number): string {
+  return `${(value * 100).toFixed(1)}%`;
 }
 
-export default function DashboardPage() {
-  const [stats, setStats] = React.useState<DashboardStats>({
-    totalProspects: 0,
-    sitesGenerated: 0,
-    sitesDeployed: 0,
-    pendingOutreach: 0,
-  });
-  const [activities, setActivities] = React.useState<RecentActivity[]>([]);
-  const [loading, setLoading] = React.useState(true);
+export default async function DashboardPage() {
+  let stats: Awaited<ReturnType<typeof getDashboardStats>> | null;
+  try {
+    stats = await getDashboardStats();
+  } catch {
+    stats = null;
+  }
 
-  React.useEffect(() => {
-    async function fetchData() {
-      try {
-        const [statsRes, activitiesRes] = await Promise.all([
-          fetch(`${API_URL}/api/dashboard/stats`),
-          fetch(`${API_URL}/api/dashboard/activity`),
-        ]);
-        if (statsRes.ok) {
-          setStats(await statsRes.json());
-        }
-        if (activitiesRes.ok) {
-          setActivities(await activitiesRes.json());
-        }
-      } catch (error) {
-        console.error('Failed to fetch dashboard data:', error);
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchData();
-  }, []);
+  if (!stats) {
+    return (
+      <div>
+        <div className="mb-8">
+          <h1 className="text-2xl font-bold text-slate-900">Tableau de bord</h1>
+          <p className="text-slate-500 mt-1">Vue d&apos;ensemble de votre pipeline</p>
+        </div>
+        <div className="bg-white rounded-xl border border-slate-200 p-12 text-center shadow-sm">
+          <div className="text-4xl mb-4">!</div>
+          <h2 className="text-lg font-semibold text-slate-700 mb-2">
+            Impossible de charger les statistiques
+          </h2>
+          <p className="text-slate-500 text-sm max-w-md mx-auto">
+            Le serveur API est peut-etre indisponible. Verifiez que le backend
+            tourne sur le port 3333 et reessayez.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   const statCards = [
     {
       label: 'Total Prospects',
-      value: stats.totalProspects,
-      color: 'bg-blue-600',
-      textColor: 'text-blue-600',
-      bgLight: 'bg-blue-50',
+      value: String(stats.totalProspects),
+      accent: 'text-blue-600',
+      bg: 'bg-blue-50',
+      dot: 'bg-blue-600',
     },
     {
-      label: 'Sites Generated',
-      value: stats.sitesGenerated,
-      color: 'bg-green-600',
-      textColor: 'text-green-600',
-      bgLight: 'bg-green-50',
+      label: 'Sites deployes',
+      value: String(stats.totalSitesDeployed),
+      accent: 'text-violet-600',
+      bg: 'bg-violet-50',
+      dot: 'bg-violet-600',
     },
     {
-      label: 'Sites Deployed',
-      value: stats.sitesDeployed,
-      color: 'bg-purple-600',
-      textColor: 'text-purple-600',
-      bgLight: 'bg-purple-50',
+      label: 'Clients actifs',
+      value: String(stats.totalClients),
+      accent: 'text-emerald-600',
+      bg: 'bg-emerald-50',
+      dot: 'bg-emerald-600',
     },
     {
-      label: 'Pending Outreach',
-      value: stats.pendingOutreach,
-      color: 'bg-amber-600',
-      textColor: 'text-amber-600',
-      bgLight: 'bg-amber-50',
+      label: 'Revenus du mois',
+      value: formatEur(stats.monthlyRevenue),
+      accent: 'text-amber-600',
+      bg: 'bg-amber-50',
+      dot: 'bg-amber-600',
     },
   ];
+
+  const maxStatusCount = Math.max(
+    ...Object.values(stats.prospectsByStatus),
+    1,
+  );
 
   return (
     <div>
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-slate-900">Dashboard</h1>
-        <p className="text-slate-500 mt-1">
-          Overview of your auto site factory pipeline
-        </p>
+        <h1 className="text-2xl font-bold text-slate-900">Tableau de bord</h1>
+        <p className="text-slate-500 mt-1">Vue d&apos;ensemble de votre pipeline</p>
       </div>
 
-      {/* Stats Cards */}
+      {/* Stat Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         {statCards.map((card) => (
           <div
@@ -102,66 +119,117 @@ export default function DashboardPage() {
                 <p className="text-sm font-medium text-slate-500">
                   {card.label}
                 </p>
-                <p className={`text-3xl font-bold mt-2 ${card.textColor}`}>
-                  {loading ? '...' : card.value}
+                <p className={`text-3xl font-bold mt-2 ${card.accent}`}>
+                  {card.value}
                 </p>
               </div>
               <div
-                className={`w-12 h-12 ${card.bgLight} rounded-lg flex items-center justify-center`}
+                className={`w-12 h-12 ${card.bg} rounded-lg flex items-center justify-center`}
               >
-                <div className={`w-3 h-3 ${card.color} rounded-full`} />
+                <div className={`w-3 h-3 ${card.dot} rounded-full`} />
               </div>
             </div>
           </div>
         ))}
       </div>
 
-      {/* Recent Activity */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm">
-        <div className="px-6 py-4 border-b border-slate-200">
-          <h2 className="text-lg font-semibold text-slate-900">
-            Recent Activity
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        {/* Conversion Rate */}
+        <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
+          <h2 className="text-lg font-semibold text-slate-900 mb-4">
+            Taux de conversion
           </h2>
+          <p className="text-slate-500 text-sm mb-3">
+            De l&apos;envoi d&apos;email a la conversion en client
+          </p>
+          <div className="flex items-end gap-3 mb-4">
+            <span className="text-4xl font-bold text-emerald-600">
+              {formatPercent(stats.conversionRate)}
+            </span>
+          </div>
+          <div className="w-full bg-slate-100 rounded-full h-3">
+            <div
+              className="bg-emerald-500 h-3 rounded-full transition-all"
+              style={{ width: `${Math.min(stats.conversionRate * 100, 100)}%` }}
+            />
+          </div>
         </div>
-        <div className="divide-y divide-slate-100">
-          {loading ? (
-            <div className="px-6 py-8 text-center text-slate-400">
-              Loading activity...
+
+        {/* Email Stats */}
+        <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
+          <h2 className="text-lg font-semibold text-slate-900 mb-4">
+            Statistiques emails
+          </h2>
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-slate-500">Envoyes</span>
+              <span className="text-sm font-semibold text-slate-900">
+                {stats.emailStats.sent}
+              </span>
             </div>
-          ) : activities.length === 0 ? (
-            <div className="px-6 py-8 text-center text-slate-400">
-              No recent activity
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-slate-500">Taux d&apos;ouverture</span>
+              <span className="text-sm font-semibold text-blue-600">
+                {formatPercent(stats.emailStats.openRate)}
+              </span>
             </div>
-          ) : (
-            activities.map((activity) => (
+            <div className="w-full bg-slate-100 rounded-full h-2">
               <div
-                key={activity.id}
-                className="px-6 py-4 flex items-center justify-between hover:bg-slate-50 transition-colors"
-              >
-                <div className="flex items-center gap-3">
-                  <span
-                    className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                      activity.type === 'prospect_added'
-                        ? 'bg-blue-100 text-blue-700'
-                        : activity.type === 'site_generated'
-                          ? 'bg-green-100 text-green-700'
-                          : activity.type === 'site_deployed'
-                            ? 'bg-purple-100 text-purple-700'
-                            : 'bg-slate-100 text-slate-700'
-                    }`}
-                  >
-                    {activity.type.replace(/_/g, ' ')}
-                  </span>
-                  <span className="text-sm text-slate-700">
-                    {activity.message}
-                  </span>
-                </div>
-                <span className="text-xs text-slate-400">
-                  {new Date(activity.createdAt).toLocaleDateString()}
-                </span>
+                className="bg-blue-500 h-2 rounded-full"
+                style={{
+                  width: `${Math.min(stats.emailStats.openRate * 100, 100)}%`,
+                }}
+              />
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-slate-500">Taux de clic</span>
+              <span className="text-sm font-semibold text-indigo-600">
+                {formatPercent(stats.emailStats.clickRate)}
+              </span>
+            </div>
+            <div className="w-full bg-slate-100 rounded-full h-2">
+              <div
+                className="bg-indigo-500 h-2 rounded-full"
+                style={{
+                  width: `${Math.min(stats.emailStats.clickRate * 100, 100)}%`,
+                }}
+              />
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-slate-500">Rebonds</span>
+              <span className="text-sm font-semibold text-red-500">
+                {stats.emailStats.bounced}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Prospects by Status */}
+      <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
+        <h2 className="text-lg font-semibold text-slate-900 mb-4">
+          Prospects par statut
+        </h2>
+        <div className="space-y-3">
+          {Object.entries(stats.prospectsByStatus).map(([status, count]) => (
+            <div key={status} className="flex items-center gap-4">
+              <span className="text-sm text-slate-600 w-36 shrink-0">
+                {STATUS_LABELS[status] || status}
+              </span>
+              <div className="flex-1 bg-slate-100 rounded-full h-5 overflow-hidden">
+                <div
+                  className={`h-5 rounded-full ${STATUS_COLORS[status] || 'bg-slate-300'}`}
+                  style={{
+                    width: `${(count / maxStatusCount) * 100}%`,
+                    minWidth: count > 0 ? '1rem' : '0',
+                  }}
+                />
               </div>
-            ))
-          )}
+              <span className="text-sm font-semibold text-slate-900 w-10 text-right">
+                {count}
+              </span>
+            </div>
+          ))}
         </div>
       </div>
     </div>
