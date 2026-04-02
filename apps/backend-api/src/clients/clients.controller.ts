@@ -1,27 +1,49 @@
 import { Controller, Get, Post, Param, Body } from '@nestjs/common';
-import { ApiTags, ApiOperation } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { ClientAccountCreateSchema } from '@my-auto-site-factory/core-types';
+import { Roles, CurrentUser } from '../auth';
+import { ZodValidationPipe } from '../common';
 import { ClientsService } from './clients.service';
 
-@ApiTags('Clients')
+@ApiTags('clients')
+@ApiBearerAuth()
 @Controller('clients')
 export class ClientsController {
-  constructor(private readonly clientsService: ClientsService) {}
+  constructor(private readonly service: ClientsService) {}
 
   @Get()
-  @ApiOperation({ summary: 'List all client accounts' })
+  @Roles('ADMIN')
+  @ApiOperation({ summary: 'Lister tous les comptes clients' })
   findAll() {
-    return this.clientsService.findAll();
+    return this.service.findAll();
+  }
+
+  @Get('me')
+  @ApiOperation({ summary: 'Mon compte client (utilisateur connecté)' })
+  findMe(@CurrentUser('id') userId: string) {
+    return this.service.findByUserId(userId);
   }
 
   @Get(':id')
-  @ApiOperation({ summary: 'Get a client account by ID' })
+  @Roles('ADMIN')
+  @ApiOperation({ summary: 'Détail d\'un compte client' })
   findOne(@Param('id') id: string) {
-    return this.clientsService.findOne(id);
+    return this.service.findOne(id);
   }
 
   @Post()
+  @Roles('ADMIN')
   @ApiOperation({ summary: 'Create a client account from a prospect' })
-  create(@Body() data: { prospectId: string; email: string }) {
-    return this.clientsService.create(data);
+  create(
+    @Body(new ZodValidationPipe(ClientAccountCreateSchema))
+    body: {
+      prospectId: string;
+      email: string;
+      businessName: string;
+      ownerName?: string;
+      phone?: string;
+    },
+  ) {
+    return this.service.create(body);
   }
 }

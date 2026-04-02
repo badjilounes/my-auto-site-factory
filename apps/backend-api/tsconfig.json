@@ -5,8 +5,7 @@
     "moduleResolution": "node",
     "emitDecoratorMetadata": true,
     "experimentalDecorators": true,
-    "outDir": "../../dist/apps/api",
-    "rootDir": "src",
+    "outDir": "../../dist/apps/backend-api",
     "types": ["node"]
   },
   "include": ["src/**/*.ts"],
