@@ -1,28 +1,47 @@
-import { Controller, Get, Post, Body } from '@nestjs/common';
-import { ApiTags, ApiOperation } from '@nestjs/swagger';
+import {
+  Controller,
+  Get,
+  Post,
+  Param,
+  Body,
+  Query,
+} from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { ScrapingJobCreateSchema } from '@my-auto-site-factory/core-types';
 import { ScrapingService } from './scraping.service';
+import { Roles } from '../auth';
+import { ZodValidationPipe } from '../common';
 
-@ApiTags('Scraping')
+@ApiTags('scraping')
+@ApiBearerAuth()
 @Controller('scraping')
 export class ScrapingController {
   constructor(private readonly scrapingService: ScrapingService) {}
 
   @Post('start')
+  @Roles('ADMIN')
   @ApiOperation({ summary: 'Start a new scraping job' })
   start(
-    @Body()
-    data: {
-      source: string;
-      query: string;
-      city?: string;
-    },
+    @Body(new ZodValidationPipe(ScrapingJobCreateSchema))
+    data: Record<string, unknown>,
   ) {
-    return this.scrapingService.startJob(data);
+    return this.scrapingService.startJob(data as any);
   }
 
   @Get('jobs')
+  @Roles('ADMIN')
   @ApiOperation({ summary: 'List all scraping jobs' })
-  listJobs() {
-    return this.scrapingService.listJobs();
+  listJobs(
+    @Query('status') status?: string,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+  ) {
+    return this.scrapingService.listJobs({ status, page, limit });
+  }
+
+  @Get('jobs/:id')
+  @ApiOperation({ summary: 'Get a scraping job by ID' })
+  findOne(@Param('id') id: string) {
+    return this.scrapingService.findOne(id);
   }
 }

@@ -7,6 +7,5 @@ import { ScrapingService } from './scraping.service';
   imports: [BullModule.registerQueue({ name: 'scraping' })],
   controllers: [ScrapingController],
   providers: [ScrapingService],
-  exports: [ScrapingService],
 })
 export class ScrapingModule {}
