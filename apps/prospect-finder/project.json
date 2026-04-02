@@ -20,7 +20,8 @@
       "executor": "@nx/js:node",
       "options": {
         "buildTarget": "prospect-finder:build",
-        "watch": true
+        "watch": true,
+        "args": []
       }
     }
   },

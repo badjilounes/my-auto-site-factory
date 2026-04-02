@@ -1,7 +1,10 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "outDir": "../../dist/apps/prospect-finder"
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "outDir": "../../dist/apps/prospect-finder",
+    "types": ["node"]
   },
   "include": ["src/**/*.ts"]
 }
