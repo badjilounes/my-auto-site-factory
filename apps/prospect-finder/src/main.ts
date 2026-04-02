@@ -1,108 +1,63 @@
-import { Worker } from 'bullmq';
-import IORedis from 'ioredis';
-import { PrismaClient } from '@prisma/client';
+/**
+ * Prospect Finder — Entry point
+ *
+ * Two modes of operation:
+ *
+ * 1. WORKER MODE (default):
+ *    Listens on BullMQ 'scraping' queue for jobs dispatched by the backend API.
+ *    Each job scrapes a specific city/source and syncs to DB.
+ *
+ *    Usage: nx serve prospect-finder
+ *
+ * 2. CRON MODE:
+ *    Iterates through all configured cities/categories autonomously.
+ *    Can run once or on a recurring interval.
+ *
+ *    Usage: PROSPECT_FINDER_MODE=cron nx serve prospect-finder
+ *    With interval: PROSPECT_FINDER_MODE=cron CRON_INTERVAL_MINUTES=60 nx serve prospect-finder
+ *
+ * Environment variables:
+ *   PROSPECT_FINDER_MODE    — "worker" (default) or "cron"
+ *   SCRAPING_CITIES         — Comma-separated cities (default: 10 French cities from config)
+ *   SCRAPING_CATEGORIES     — Comma-separated cuisines (default: all)
+ *   MAX_RESULTS_PER_CITY    — Max prospects per city (default: 30)
+ *   DELAY_BETWEEN_CITIES    — Delay in ms between city scrapes (default: 5000)
+ *   ANALYZE_WEBSITES        — "true" or "false" (default: true)
+ *   CRON_INTERVAL_MINUTES   — Recurring interval in minutes (default: 0 = run once)
+ *   REDIS_URL               — Redis connection URL (default: redis://localhost:6379)
+ *   SCRAPER_PROXY_URL       — Optional proxy for scrapers
+ *   DATABASE_URL            — PostgreSQL connection URL
+ */
 
-const prisma = new PrismaClient();
-const connection = new IORedis(process.env.REDIS_URL || 'redis://localhost:6379', {
-  maxRetriesPerRequest: null,
-});
+import { loadConfig } from './config';
+import { runCronMode } from './cron-runner';
+import { runWorkerMode } from './worker';
 
-interface ScrapingJobData {
-  source: 'UBEREATS' | 'DELIVEROO' | 'GOOGLE' | 'WEBSITE';
-  city: string;
-  cuisine?: string;
-  jobId: string;
+async function main() {
+  const config = loadConfig();
+
+  console.log('┌──────────────────────────────────────────┐');
+  console.log('│       Prospect Finder                    │');
+  console.log('│       My Auto Site Factory               │');
+  console.log('├──────────────────────────────────────────┤');
+  console.log(`│  Mode:       ${config.mode.toUpperCase().padEnd(28)}│`);
+  console.log(`│  Cities:     ${String(config.cities.length).padEnd(28)}│`);
+  console.log(`│  Categories: ${(config.categories.length || 'all').toString().padEnd(28)}│`);
+  console.log(`│  Max/city:   ${String(config.maxResultsPerCity).padEnd(28)}│`);
+  console.log(`│  Websites:   ${(config.analyzeWebsites ? 'yes' : 'no').padEnd(28)}│`);
+  if (config.mode === 'cron' && config.cronIntervalMinutes > 0) {
+    console.log(`│  Interval:   every ${config.cronIntervalMinutes}min${' '.repeat(Math.max(0, 21 - String(config.cronIntervalMinutes).length))}│`);
+  }
+  console.log('└──────────────────────────────────────────┘');
+
+  if (config.mode === 'cron') {
+    await runCronMode(config);
+  } else {
+    await runWorkerMode(config);
+  }
 }
 
-const worker = new Worker<ScrapingJobData>(
-  'scraping',
-  async (job) => {
-    const { source, city, cuisine, jobId } = job.data;
-    console.log(`[Prospect Finder] Starting ${source} scrape for ${city}${cuisine ? ` - ${cuisine}` : ''}`);
-
-    await prisma.scrapingJob.update({
-      where: { id: jobId },
-      data: { status: 'RUNNING', startedAt: new Date() },
-    });
-
-    try {
-      let results: any[] = [];
-
-      // Import scrapers dynamically to avoid loading playwright at startup
-      if (source === 'UBEREATS') {
-        const { scrapeUberEats } = await import('@my-auto-site-factory/integrations-scrapers');
-        results = await scrapeUberEats(city, cuisine);
-      } else if (source === 'DELIVEROO') {
-        const { scrapeDeliveroo } = await import('@my-auto-site-factory/integrations-scrapers');
-        results = await scrapeDeliveroo(city, cuisine);
-      }
-
-      // Reconcile and save prospects
-      for (const result of results) {
-        const existing = await prisma.prospect.findFirst({
-          where: {
-            businessName: { contains: result.name, mode: 'insensitive' },
-            city: { equals: city, mode: 'insensitive' },
-          },
-        });
-
-        if (existing) {
-          await prisma.prospect.update({
-            where: { id: existing.id },
-            data: {
-              rating: result.rating || existing.rating,
-              priceRange: result.priceRange || existing.priceRange,
-              ...(source === 'UBEREATS' ? { uberEatsUrl: result.url } : {}),
-              ...(source === 'DELIVEROO' ? { deliverooUrl: result.url } : {}),
-              status: 'ENRICHED',
-            },
-          });
-        } else {
-          await prisma.prospect.create({
-            data: {
-              businessName: result.name,
-              address: result.address || '',
-              city,
-              cuisine: result.cuisine || cuisine || '',
-              rating: result.rating,
-              priceRange: result.priceRange,
-              ...(source === 'UBEREATS' ? { uberEatsUrl: result.url } : {}),
-              ...(source === 'DELIVEROO' ? { deliverooUrl: result.url } : {}),
-              logoUrl: result.imageUrl,
-              status: 'NEW',
-            },
-          });
-        }
-      }
-
-      await prisma.scrapingJob.update({
-        where: { id: jobId },
-        data: {
-          status: 'COMPLETED',
-          resultCount: results.length,
-          completedAt: new Date(),
-        },
-      });
-
-      console.log(`[Prospect Finder] Completed: ${results.length} results for ${city}`);
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      await prisma.scrapingJob.update({
-        where: { id: jobId },
-        data: { status: 'FAILED', error: errorMessage, completedAt: new Date() },
-      });
-      throw error;
-    }
-  },
-  { connection, concurrency: 2 }
-);
-
-worker.on('completed', (job) => {
-  console.log(`[Prospect Finder] Job ${job.id} completed`);
+main().catch((error) => {
+  console.error('[Fatal] Prospect finder crashed:', error);
+  process.exit(1);
 });
-
-worker.on('failed', (job, err) => {
-  console.error(`[Prospect Finder] Job ${job?.id} failed:`, err.message);
-});
-
-console.log('[Prospect Finder] Worker started, waiting for scraping jobs...');
